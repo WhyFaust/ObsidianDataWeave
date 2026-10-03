@@ -40,7 +40,7 @@ from typing import Any
 import yaml
 
 try:
-    from scripts.config import PROJECT_ROOT, load_config as _load_config
+    from scripts.config import DEFAULT_RUNTIME_DIR, PROJECT_ROOT, load_config as _load_config
     from scripts.rewrite_backend import call_rewriter, write_debug_prompt
     from scripts.vault_writer import get_vault_dest
     from scripts.wiki_models import (
@@ -56,7 +56,7 @@ try:
         parse_changeset,
     )
 except ModuleNotFoundError:
-    from config import PROJECT_ROOT, load_config as _load_config
+    from config import DEFAULT_RUNTIME_DIR, PROJECT_ROOT, load_config as _load_config
     from rewrite_backend import call_rewriter, write_debug_prompt
     from vault_writer import get_vault_dest
     from wiki_models import (
@@ -78,7 +78,7 @@ RULES_DIR = PROJECT_ROOT / "rules"
 WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 FENCED_CODE_RE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
-DEBUG_RESPONSE_PATH = Path("/tmp/dw/debug-response.json")
+DEBUG_RESPONSE_PATH = DEFAULT_RUNTIME_DIR / "debug-response.json"
 
 
 _OUTER_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```\s*\Z")
@@ -143,7 +143,7 @@ def snapshot_wiki_space(root: Path) -> dict[str, Any]:
     pages: dict[str, dict[str, Any]] = {}
     existing_links: dict[str, list[str]] = {}
     for md in root.rglob("*.md"):
-        rel = str(md.relative_to(root))
+        rel = md.relative_to(root).as_posix()
         try:
             text = md.read_text(encoding="utf-8")
         except OSError:
@@ -183,6 +183,7 @@ def select_raw_inputs(
 ) -> list[dict[str, Any]]:
     """Return raw notes to feed into this compile pass."""
     if raw_only_glob:
+        raw_only_glob = raw_only_glob.replace("\\", "/")
         matched = [
             rel for rel in snapshot["pages"]
             if rel.startswith("raw/") and Path(rel).match(raw_only_glob)
@@ -373,7 +374,7 @@ def validate_changeset(cs: ChangeSet, snapshot: dict[str, Any]) -> None:
     for page in cs.creates:
         try:
             dest_dir = get_vault_dest(WIKI_NOTE_TYPE, routing_config, page.frontmatter)
-            dest_rel = str((dest_dir / Path(page.rel_path).name).relative_to(routing_root))
+            dest_rel = (dest_dir / Path(page.rel_path).name).relative_to(routing_root).as_posix()
         except ValueError as exc:
             errors.append(f"creates[{page.rel_path}]: {exc}")
             continue

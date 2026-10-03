@@ -54,32 +54,68 @@ ObsidianDataWeave превращает Claude Code и Codex в полноцен�
 ```bash
 git clone https://github.com/howdeploy/ObsidianDataWeave.git
 cd ObsidianDataWeave
-bash install.sh --vault-path "/путь/к/вашему/vault"
+python3 install.py --vault-path "/путь/к/вашему/vault"
 ```
 
-Или скопируйте этот промпт в Claude Code или Codex — он сделает всё сам:
+На Windows установка выполняется из PowerShell без Bash, `sed` и прав на симлинки:
+
+```powershell
+git clone https://github.com/howdeploy/ObsidianDataWeave.git
+Set-Location ObsidianDataWeave
+py -3 install.py --mode codex --vault-path 'C:/path/to/Obsidian Vault'
+```
+
+Укажите существующий vault; пути выше — примеры. Если launcher `py` отсутствует,
+используйте `python install.py`. На Linux/macOS сохранена совместимость с
+`bash install.sh`: это тонкая обёртка над тем же Python-установщиком.
+
+Или скопируйте этот промпт в Claude Code или Codex:
 
 ```
-Клонируй https://github.com/howdeploy/ObsidianDataWeave.git и запусти bash install.sh --vault-path "/путь/к/vault" в клонированной директории.
+Клонируй https://github.com/howdeploy/ObsidianDataWeave.git и запусти install.py через Python 3.10+ с --mode codex и --vault-path к моему существующему vault.
 ```
 
 Установщик:
-- Проверит Python 3.10+ и установит зависимости (`python-docx`, `pyyaml`)
-- Создаст `config.toml` с путём к vault
-- Зарегистрирует навык глобально в `~/.claude/skills/obsidian-dataweave/`
-- Добавит блок в `~/.claude/CLAUDE.md`
+- Проверит Python 3.10+, создаст локальную `.venv` и установит весь `requirements.txt`
+  через её интерпретатор; системный Python и `pip --user` не изменяются
+- Создаст `config.toml` с безопасно экранированным путём и временным каталогом текущей ОС;
+  существующие значения config сохраняются
+- При `--mode claude` скопирует навык в `~/.claude/skills/obsidian-dataweave/`
+  и обновит только блок ObsidianDataWeave в `~/.claude/CLAUDE.md`
+- Выполнит локальную миграцию/индексацию памяти; `--skip-index` позволяет отложить её
 
-После установки навык работает **из любой директории**.
+После установки Claude-навык доступен **из любой директории**. Скрипты запускайте
+интерпретатором проекта: `.venv/bin/python` на Linux/macOS или
+`.venv\Scripts\python.exe` на Windows. Например:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/memory_index.py search 'Wiki' --json
+```
+
+Claude/Codex CLI нужен для LLM-перезаписи, rclone — для Google Drive; они не нужны
+для локального FTS5-поиска. NotebookLM browser setup/login выполняется отдельно
+через `scripts/notebooklm_setup.py` интерпретатором `.venv`.
 
 ## Обновление
 
 ```bash
-cd ObsidianDataWeave && git pull && bash install.sh
+cd ObsidianDataWeave
+git pull
+python3 install.py
 ```
 
-Установщик идемпотентен: симлинки навыка обновятся сами, `migrate.py` допишет
-новые секции конфига (например `[memory]`) и развернёт FTS5-индекс памяти.
-`config.toml` и vault не перезатираются.
+На Windows вместо последней команды используйте `py -3 install.py --mode codex`.
+При обновлении сохраняйте выбранный режим (`--mode local|claude|codex`). Установщик
+повторно использует `.venv`, синхронизирует зависимости и копии Claude-навыка;
+`migrate.py` дописывает недостающий `[memory]` и создаёт/обновляет локальный индекс.
+Значения config и содержимое vault не перезаписываются.
+
+`.venv` и `config.toml` — машинные данные: не переносите virtualenv между ОС.
+После переноса репозитория создайте окружение заново и проверьте локальные пути
+config; установщик не стирает несовместимое окружение автоматически. Если задан
+старый явный Linux `staging_dir`, исправьте его локально или оставьте пустым для
+системного temp. Установка не выполняет тесты, браузерный вход или загрузку vault
+во внешние сервисы.
 
 ### Режимы установки
 

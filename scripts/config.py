@@ -9,6 +9,7 @@ Single source of truth for:
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 # ── tomllib import ────────────────────────────────────────────────────────────
@@ -24,7 +25,8 @@ except ImportError:
 # ── Path constants ────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DEFAULT_STAGING_DIR = "/tmp/dw/staging"
+DEFAULT_RUNTIME_DIR = Path(tempfile.gettempdir()) / "obsidian-dataweave"
+DEFAULT_STAGING_DIR = str(DEFAULT_RUNTIME_DIR / "staging")
 REGISTRY_PATH = PROJECT_ROOT / "processed.json"
 
 # ── Config loader ─────────────────────────────────────────────────────────────
@@ -72,4 +74,8 @@ def load_config(*, strict: bool = False) -> dict:
         return {"rclone": {"staging_dir": DEFAULT_STAGING_DIR}}
 
     with open(config_path, "rb") as f:
-        return tomllib.load(f)
+        config = tomllib.load(f)
+    rclone = config.setdefault("rclone", {})
+    if not rclone.get("staging_dir"):
+        rclone["staging_dir"] = DEFAULT_STAGING_DIR
+    return config

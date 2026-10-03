@@ -52,32 +52,68 @@ All NotebookLM interaction goes through the Python API (`notebooklm-py`), not th
 ```bash
 git clone https://github.com/howdeploy/ObsidianDataWeave.git
 cd ObsidianDataWeave
-bash install.sh --vault-path "/path/to/your/obsidian/vault"
+python3 install.py --vault-path "/path/to/your/obsidian/vault"
 ```
 
-Or copy this prompt into Claude Code or Codex — it handles everything:
+On Windows use PowerShell, with no Bash, `sed`, or symlink privileges:
+
+```powershell
+git clone https://github.com/howdeploy/ObsidianDataWeave.git
+Set-Location ObsidianDataWeave
+py -3 install.py --mode codex --vault-path 'C:/path/to/Obsidian Vault'
+```
+
+Supply an existing vault; these paths are examples. If `py` is unavailable, use
+`python install.py`. Linux/macOS can still use `bash install.sh`, a thin wrapper
+around the same Python installer.
+
+Or copy this prompt into Claude Code or Codex:
 
 ```
-Clone https://github.com/howdeploy/ObsidianDataWeave.git and run bash install.sh --vault-path "/path/to/vault" in the cloned directory.
+Clone https://github.com/howdeploy/ObsidianDataWeave.git and run install.py with Python 3.10+, --mode codex and --vault-path pointing to my existing vault.
 ```
 
 The installer will:
-- Check Python 3.10+ and install dependencies (`python-docx`, `pyyaml`)
-- Create `config.toml` with your vault path
-- Register the skill globally in `~/.claude/skills/obsidian-dataweave/`
-- Add a helper block to `~/.claude/CLAUDE.md`
+- Check Python 3.10+, create a project `.venv`, and install all requirements with
+  that interpreter's pip; no system or `pip --user` installation
+- Create `config.toml` with safely escaped paths and the OS temporary directory;
+  preserve existing config values
+- In `--mode claude`, copy the global skill and update only the ObsidianDataWeave
+  section in `~/.claude/CLAUDE.md`; no symlinks required
+- Migrate/build the local memory index; use `--skip-index` to defer it
 
-After installation the skill works **from any directory**.
+After installation the Claude skill is available **from any directory**. Run
+scripts with `.venv/bin/python` on Linux/macOS or `.venv\Scripts\python.exe`
+on Windows. For example:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/memory_index.py search 'Wiki' --json
+```
+
+Claude/Codex CLI is needed for LLM rewrites, rclone for Google Drive; neither is
+needed for local FTS5 search. NotebookLM browser setup/login is a separate step
+via `scripts/notebooklm_setup.py` using the project interpreter.
 
 ## Upgrade
 
 ```bash
-cd ObsidianDataWeave && git pull && bash install.sh
+cd ObsidianDataWeave
+git pull
+python3 install.py
 ```
 
-The installer is idempotent: skill symlinks update themselves, `migrate.py`
-appends new config sections (e.g. `[memory]`) and deploys the FTS5 memory
-index. `config.toml` and the vault are never overwritten.
+On Windows use `py -3 install.py --mode codex` for the last command. Preserve
+your chosen mode on upgrades (`--mode local|claude|codex`). Rerunning reuses
+the venv, synchronizes dependencies and refreshes copied Claude skill files;
+`migrate.py` appends a missing `[memory]` section and creates/updates the index.
+Existing config values and vault contents are preserved.
+
+Virtual environments and `config.toml` are machine-local: do not copy `.venv`
+between operating systems. After moving a checkout, create a fresh environment
+and review config paths. The installer refuses to delete an incompatible venv
+automatically. Replace an old explicit Linux staging path locally, or leave
+`staging_dir` empty to select the OS temp directory. Installation runs no tests,
+browser login, or vault upload.
 
 ### Install modes
 

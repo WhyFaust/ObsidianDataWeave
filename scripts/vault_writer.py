@@ -18,8 +18,9 @@ Deduplication: (source_doc, title) pair tracked in processed.json registry.
 MOC files are always overwritten (auto-generated, no manual edits expected).
 MOC written last (sorted after all atomic notes).
 
-Wiki notes always overwrite themselves: wiki_compile.py emits a fully merged
-body, so the existing dedup branch is skipped. Wiki meta-pages (SCHEMA.md,
+Compiled wiki notes overwrite themselves: wiki_compile.py emits a fully merged
+body, so the existing dedup branch is skipped. Raw inputs never overwrite.
+Wiki meta-pages (SCHEMA.md,
 index.md, log.md) sort to the end of the run alongside MOC files.
 
 All diagnostics go to stderr. Summary printed to both stdout and stderr.
@@ -46,6 +47,14 @@ except ModuleNotFoundError:
 def load_config() -> dict:
     """Strict config loader — vault_path must be known before writing."""
     return _load_config(strict=True)
+
+
+def create_raw_note(dest_path: Path, content: str) -> Path:
+    """Create an immutable raw input; an existing path raises FileExistsError."""
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    with dest_path.open("x", encoding="utf-8") as stream:
+        stream.write(content)
+    return dest_path
 
 
 # ── Registry (processed.json) ───────────────────────────────────────────────────
@@ -425,7 +434,7 @@ def main() -> None:
         if not source_doc and title in atom_plan_source:
             source_doc = atom_plan_source[title]
 
-        # Dedup check — MOC always overwrites, wiki always overwrites
+        # Dedup check — MOC and compiled wiki overwrite; raw is guarded below.
         # (wiki_compile.py emits a fully merged body and would lose data if
         # the writer skipped on conflict). Other note_types check the
         # registry by (source_doc, title) pair.
@@ -457,7 +466,15 @@ def main() -> None:
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         dest_path = dest_dir / md_file.name
-        shutil.copy2(md_file, dest_path)
+        if note_type == WIKI_NOTE_TYPE and fm.get("wiki_page_type") == "raw":
+            try:
+                create_raw_note(dest_path, content)
+            except FileExistsError:
+                print(f"SKIP: immutable raw already exists: {dest_path}", file=sys.stderr)
+                skipped += 1
+                continue
+        else:
+            shutil.copy2(md_file, dest_path)
 
         # Track for registry update
         if source_doc:

@@ -34,12 +34,16 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
+
 try:
     from scripts.config import PROJECT_ROOT, load_config as _load_config
     from scripts.wiki_models import WIKI_RAW_KINDS, is_valid_slug
+    from scripts.vault_writer import create_raw_note
 except ModuleNotFoundError:
     from config import PROJECT_ROOT, load_config as _load_config
     from wiki_models import WIKI_RAW_KINDS, is_valid_slug
+    from vault_writer import create_raw_note
 
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9-]+")
@@ -84,20 +88,21 @@ def expand_inputs(token: str) -> list[Path]:
     return sorted(f for f in p.rglob("*") if f.is_file())
 
 
-def _build_raw_frontmatter(slug: str, label: str, source: str, today: str) -> str:
-    return (
-        "---\n"
-        f"tags:\n  - wiki/raw\n  - wiki/ingested\n"
-        f"date: {today}\n"
-        f"source_doc: \"wiki:{slug}:raw:{label}\"\n"
-        "note_type: wiki\n"
-        f"wiki_project: {slug}\n"
-        "wiki_page_type: raw\n"
-        "wiki_status: ingested\n"
-        f"raw_source: \"{source}\"\n"
-        "---\n"
-        "\n"
-    )
+def _build_raw_frontmatter(
+    slug: str, label: str, source: str, today: str, *, kind: str = "docs"
+) -> str:
+    fm = {
+        "tags": ["wiki/raw", "wiki/ingested"],
+        "date": today,
+        "source_doc": f"wiki:{slug}:raw:{label}",
+        "note_type": "wiki",
+        "wiki_project": slug,
+        "wiki_page_type": "raw",
+        "wiki_status": "ingested",
+        "raw_kind": kind,
+        "raw_source": source,
+    }
+    return "---\n" + yaml.safe_dump(fm, allow_unicode=True, sort_keys=False) + "---\n\n"
 
 
 def _read_text_file(path: Path) -> str:
@@ -120,16 +125,18 @@ def write_raw_note(
     """Write a single raw note. Returns the destination path."""
     if kind not in WIKI_RAW_KINDS:
         raise ValueError(f"raw kind '{kind}' not in {list(WIKI_RAW_KINDS)}")
+    if not is_valid_slug(label):
+        raise ValueError(f"raw label '{label}' is not a valid kebab-case slug")
     raw_dir = wiki_root / "raw" / kind
-    raw_dir.mkdir(parents=True, exist_ok=True)
     dest = raw_dir / f"{today}-{label}.md"
     counter = 2
-    while dest.exists():
-        dest = raw_dir / f"{today}-{label}-{counter}.md"
-        counter += 1
-    fm = _build_raw_frontmatter(slug, dest.stem, source_id, today)
-    dest.write_text(fm + body, encoding="utf-8")
-    return dest
+    while True:
+        fm = _build_raw_frontmatter(slug, dest.stem, source_id, today, kind=kind)
+        try:
+            return create_raw_note(dest, fm + body)
+        except FileExistsError:
+            dest = raw_dir / f"{today}-{label}-{counter}.md"
+            counter += 1
 
 
 def main() -> int:
@@ -245,6 +252,15 @@ def main() -> int:
     for dest in written:
         rel = dest.relative_to(wiki_root)
         print(f"OK: {rel_root}/{rel}")
+
+    try:
+        try:
+            from scripts.memory_index import auto_update_after_write
+        except ModuleNotFoundError:
+            from memory_index import auto_update_after_write
+        auto_update_after_write(config)
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARNING: memory index refresh skipped: {exc}", file=sys.stderr)
 
     if args.no_compile:
         return 0

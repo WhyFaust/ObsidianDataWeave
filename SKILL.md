@@ -57,6 +57,11 @@ trigger_phrases:
 
 Use the repo-local `AGENTS.md` as the primary contract.
 
+Run from the repository directory with its installed Python interpreter.
+Replace `python3` in the examples with `.venv/bin/python` on Linux/macOS or
+`.venv\Scripts\python.exe` on Windows; the global registration block also records
+the interpreter path. Do not recreate an existing venv during NotebookLM setup.
+
 ## Intent Mapping
 
 - Process a source `.docx` document:
@@ -162,16 +167,18 @@ detects this and refuses with exit code `3` when stdin is not a TTY.
 Agent protocol when you see `NOTEBOOKLM_AUTH_REQUIRED`:
 
 1. Tell the user briefly in Russian: «NotebookLM не настроен — ставлю зависимости, а логин нужно сделать самому в отдельном терминале, потому что `notebooklm login` требует настоящий TTY».
-2. Ensure a project venv exists (`.venv/`). If it does not:
-   `python3 -m venv .venv`
+2. Ensure a project venv exists (`.venv/`). If it does not, run the shared bootstrap:
+   `python3 install.py --mode local --skip-index` (Windows: `py -3 install.py --mode local --skip-index`).
 3. Run the dependency installer via the venv's Python (safe in non-TTY, no login attempted):
    `.venv/bin/python scripts/notebooklm_setup.py --skip-login`
+   On Windows: `.\.venv\Scripts\python.exe scripts/notebooklm_setup.py --skip-login`.
    It may take a minute on first run (Chromium download is ~150MB).
    If it exits non-zero, show the user its stderr and stop — do not try to recover by running individual pip/playwright commands.
 4. Ask the user to open a **separate terminal window** and run:
    ```
    cd <repo> && .venv/bin/notebooklm login
    ```
+   On Windows PowerShell, change to `<repo>`, then run `.\.venv\Scripts\notebooklm.exe login`.
    They should sign in to Google in the Chromium window, wait for the NotebookLM homepage to load, then return to that terminal and press ENTER.
 5. When the user confirms they pressed ENTER, re-run the preflight by retrying the original `process_notebook.py <notebook_id>` command (or just check that `~/.notebooklm/storage_state.json` now exists).
 6. If the preflight no longer fires, proceed silently — no further login prompts. The session is reused across runs until cookies expire.

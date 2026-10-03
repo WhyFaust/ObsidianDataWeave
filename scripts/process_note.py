@@ -29,7 +29,7 @@ from datetime import date
 from pathlib import Path
 
 try:
-    from scripts.config import PROJECT_ROOT, load_config as load_config_strict
+    from scripts.config import DEFAULT_RUNTIME_DIR, PROJECT_ROOT, load_config as load_config_strict
     from scripts.atomize import (
         extract_json, load_tags,
         validate_atom_plan, validate_tags, write_proposed_tags,
@@ -41,7 +41,7 @@ try:
         get_vault_dest, load_registry, parse_frontmatter, save_registry,
     )
 except ModuleNotFoundError:
-    from config import PROJECT_ROOT, load_config as load_config_strict
+    from config import DEFAULT_RUNTIME_DIR, PROJECT_ROOT, load_config as load_config_strict
     from atomize import (
         extract_json, load_tags,
         validate_atom_plan, validate_tags, write_proposed_tags,
@@ -603,7 +603,7 @@ def main() -> None:
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         # Write raw response for debugging
-        debug_path = Path("/tmp/dw/debug-response.json")
+        debug_path = DEFAULT_RUNTIME_DIR / "debug-response.json"
         debug_path.parent.mkdir(parents=True, exist_ok=True)
         debug_path.write_text(raw_response, encoding="utf-8")
         print(f"  Raw response saved to: {debug_path}", file=sys.stderr)

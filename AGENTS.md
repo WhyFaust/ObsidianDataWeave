@@ -5,6 +5,12 @@ This repository converts source `.docx` documents and existing Obsidian notes in
 
 Agents should treat this file as the canonical integration contract for both Claude Code and Codex.
 
+Install with Python 3.10+ using `install.py --mode codex|claude|local`.
+In all command examples below, replace `python3` with the project interpreter:
+`.venv/bin/python` on Linux/macOS or `.venv\Scripts\python.exe` on Windows.
+Use the repository directory as the working directory. Do not recreate the venv
+or install dependencies into system Python for individual workflows.
+
 ## Supported Workflows
 1. Process a source document into atomic notes and MOC:
    `python3 scripts/process.py "Document.docx"`

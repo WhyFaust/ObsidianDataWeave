@@ -10,7 +10,7 @@ contacts_folder = "Networking"              # contact notes destination
 
 [rclone]
 remote = "gdrive:"                          # rclone remote name (check: rclone listremotes)
-staging_dir = "/tmp/dw/staging"            # temporary staging area
+staging_dir = ""                           # empty = OS temp directory / obsidian-dataweave / staging
 
 [notebooklm]
 # NotebookLM profile name for multi-account setups (optional).

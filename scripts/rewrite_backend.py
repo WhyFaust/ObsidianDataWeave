@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+try:
+    from scripts.config import DEFAULT_RUNTIME_DIR
+except ModuleNotFoundError:
+    from config import DEFAULT_RUNTIME_DIR
 
 
 def detect_backend(explicit: str | None = None) -> str:
@@ -39,7 +45,7 @@ def detect_backend(explicit: str | None = None) -> str:
 
 def write_debug_prompt(prompt: str, prefix: str) -> Path:
     """Persist a prompt for manual inspection or replay."""
-    debug_dir = Path("/tmp/dw/debug-prompts")
+    debug_dir = DEFAULT_RUNTIME_DIR / "debug-prompts"
     debug_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     path = debug_dir / f"{prefix}-{timestamp}.prompt.md"
@@ -76,7 +82,7 @@ def call_claude(
     for attempt in range(1, max_retries + 1):
         try:
             result = subprocess.run(
-                ["claude", "--print"],
+                [shutil.which("claude") or "claude", "--print"],
                 input=prompt,
                 capture_output=True,
                 text=True,
@@ -109,7 +115,7 @@ def call_claude(
                 )
                 try:
                     cont_result = subprocess.run(
-                        ["claude", "--print"],
+                        [shutil.which("claude") or "claude", "--print"],
                         input=cont_prompt,
                         capture_output=True,
                         text=True,
@@ -164,7 +170,7 @@ def call_codex(
         output_path = Path(tmp.name)
 
     cmd = [
-        "codex",
+        shutil.which("codex") or "codex",
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
