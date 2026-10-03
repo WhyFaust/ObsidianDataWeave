@@ -246,6 +246,9 @@ def assemble_prompt(
 
     # Strip frontmatter dicts down to the keys the LLM actually needs to see;
     # full frontmatter explodes the prompt for big wikis.
+    # Selected raw bodies are sent in full below; keep only a pointer here.
+    batch_rels = {entry["rel_path"] for entry in raw_batch}
+    raw_pointer = "(raw input of this pass - see 'Raw inputs to merge in this pass')"
     snapshot_pages = {
         rel: {
             "frontmatter": {
@@ -254,7 +257,7 @@ def assemble_prompt(
                           "date", "source_doc", "confidence", "sources", "related")
                 if k in page["frontmatter"]
             },
-            "body": page["body"],
+            "body": raw_pointer if rel in batch_rels else page["body"],
         }
         for rel, page in snapshot["pages"].items()
     }

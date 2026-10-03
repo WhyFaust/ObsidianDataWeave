@@ -77,6 +77,35 @@ def _seed_space(root: Path) -> None:
 # ── Pure helpers ─────────────────────────────────────────────────────────────
 
 
+def test_prompt_sends_selected_raw_once_and_preserves_other_context():
+    snapshot = {
+        "slug": "demo",
+        "pages": {
+            "raw/docs/selected.md": {
+                "frontmatter": {"wiki_status": "ingested"},
+                "body": "SELECTED_RAW_BODY_123",
+            },
+            "raw/docs/previous.md": {
+                "frontmatter": {"wiki_status": "stable"},
+                "body": "PREVIOUS_RAW_BODY_456",
+            },
+            "pages/overview.md": {
+                "frontmatter": {},
+                "body": "EXISTING_PAGE_BODY_789",
+            },
+        },
+    }
+    before = json.dumps(snapshot, sort_keys=True)
+    raw_batch = select_raw_inputs(snapshot, since_last_compile=True, raw_only_glob=None)
+    for batch in (raw_batch, []):
+        prompt = wiki_compile.assemble_prompt(
+            snapshot=snapshot, raw_batch=batch, mode="project", update_only=False
+        )
+        for page in snapshot["pages"].values():
+            assert prompt.count(page["body"]) == 1
+        assert json.dumps(snapshot, sort_keys=True) == before
+
+
 class TestExtractWikilinks:
     def test_basic(self):
         assert _extract_wikilink_targets("hello [[foo]] world") == {"foo"}
