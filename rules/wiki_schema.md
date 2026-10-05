@@ -115,5 +115,9 @@ unicode.
 `stub → draft → stable` is the normal lifecycle. `stale` flags pages whose
 sources have been superseded but not yet rewritten. `contradicted` flags
 pages that conflict with another page in the same wiki-space (pair must
-also appear in `pages/open-questions.md`). `ingested` is reserved for raw
-notes after compile has consumed them.
+also appear in `pages/open-questions.md`). `ingested` marks imported raw
+notes and remains unchanged after compile. The `compiled_raws` map in
+`log.md` frontmatter records fingerprints of successfully consumed inputs;
+raw inputs stay immutable. Without this map, legacy inputs remain pending
+until a successful compile records them. `--raw-only` explicitly reselects
+matching inputs even when their fingerprints are already recorded.

@@ -148,7 +148,10 @@ Three layers per wiki-space:
   passes (load-bearing safety property — `WIKI_LINKS_LOST` exit 5
   if violated).
 - **SCHEMA.md / index.md / log.md** — meta layer. SCHEMA is frozen
-  after init; index is regenerated each compile; log is append-only.
+  after init; index is regenerated each compile; log body is append-only.
+  Its `compiled_raws` frontmatter records consumed raw fingerprints through
+  the writer pass. Legacy inputs without a fingerprint remain pending;
+  `--raw-only` permits intentional reprocessing.
 
 Two modes (set at init via `--mode`):
 
@@ -169,7 +172,7 @@ Typical workflow:
 
 ```
 wiki_init.py <slug> --mode {project|corpus} --title "<title>"
-wiki_ingest.py <slug> path/to/raw --kind {articles|docs|transcripts|assets}
+wiki_ingest.py <slug> path/to/raw --kind {articles|docs|transcripts|assets} --no-compile
 wiki_compile.py <slug> --since-last-compile
 wiki_lint.py <slug> --strict
 ```

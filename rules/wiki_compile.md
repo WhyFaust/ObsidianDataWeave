@@ -61,6 +61,11 @@ The prompt assembles, in order:
 
 Output **only** the JSON object. No prose before or after. No code fences.
 
+List every raw input successfully merged in `log_entry.raws_consumed`, using
+the exact `rel_path` from the input batch. The compiler records their content
+fingerprints in `log.md` through the writer pass. Do not modify raw files or
+propose updates to `log.md` / `index.md`; the compiler owns them.
+
 ## Hard rules (validator will fail you if violated)
 
 ### 1. Preserve every existing wikilink

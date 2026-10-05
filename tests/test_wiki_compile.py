@@ -153,6 +153,26 @@ class TestSnapshot:
 
 
 class TestSelectRaw:
+    def test_consumed_raw_is_skipped_only_after_writer_pass(self, tmp_path: Path):
+        root = tmp_path / "demo"
+        _seed_space(root)
+        raw_path = root / "raw/docs/notes.md"
+        original = raw_path.read_bytes()
+        snapshot = snapshot_wiki_space(root)
+        batch = select_raw_inputs(snapshot, since_last_compile=True, raw_only_glob=None)
+        cs = ChangeSet(project="demo", compile_id="x")
+        cs.log_entry.raws_consumed = ["raw/docs/notes.md"]
+        staging = tmp_path / "staging"
+        wiki_compile._append_log_to_staging(staging, "demo", snapshot, cs, "fixture", 0, batch)
+        assert select_raw_inputs(snapshot_wiki_space(root), since_last_compile=True, raw_only_glob=None)
+        (root / "log.md").write_bytes((staging / "log.md").read_bytes())
+        snapshot = snapshot_wiki_space(root)
+        assert select_raw_inputs(snapshot, since_last_compile=True, raw_only_glob=None) == []
+        assert select_raw_inputs(snapshot, since_last_compile=True, raw_only_glob="raw/docs/*.md")
+        assert raw_path.read_bytes() == original
+        raw_path.write_bytes(original + b"\nNew evidence\n")
+        assert select_raw_inputs(snapshot_wiki_space(root), since_last_compile=True, raw_only_glob=None)
+
     def test_since_last_compile_picks_ingested(self, tmp_path: Path):
         root = tmp_path / "demo"
         _seed_space(root)

@@ -28,6 +28,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -162,6 +163,7 @@ def snapshot_wiki_space(root: Path) -> dict[str, Any]:
         "mode": schema_fm.get("wiki_mode", "unknown"),
         "schema_frontmatter": schema_fm,
         "log_tail": log_tail,
+        "compiled_raws": pages.get("log.md", {}).get("frontmatter", {}).get("compiled_raws", {}),
         "pages": pages,
         "existing_links": existing_links,
         "all_titles": sorted({Path(rel).stem for rel in pages}),
@@ -173,6 +175,11 @@ def snapshot_wiki_space(root: Path) -> dict[str, Any]:
 
 def _is_ingested(fm: dict[str, Any]) -> bool:
     return fm.get("wiki_status") == "ingested"
+
+
+def _raw_fingerprint(page: dict[str, Any]) -> str:
+    content = json.dumps(page, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def select_raw_inputs(
@@ -193,6 +200,8 @@ def select_raw_inputs(
             matched = [
                 rel for rel in matched
                 if _is_ingested(snapshot["pages"][rel]["frontmatter"])
+                and snapshot.get("compiled_raws", {}).get(rel)
+                != _raw_fingerprint(snapshot["pages"][rel])
             ]
 
     out = []
@@ -678,6 +687,7 @@ def _append_log_to_staging(
     cs: ChangeSet,
     backend: str,
     duration_s: float,
+    raw_batch: list[dict[str, Any]],
 ) -> None:
     """Re-emit log.md for staging with one new appended row."""
     today = date.today().isoformat()
@@ -690,7 +700,7 @@ def _append_log_to_staging(
     existing = snapshot["pages"].get("log.md")
     if existing:
         body = existing["body"].rstrip() + "\n" + new_row + "\n"
-        fm = existing["frontmatter"] or {}
+        fm = dict(existing["frontmatter"] or {})
     else:
         body = (
             "# Log — " + slug + "\n\n"
@@ -708,6 +718,12 @@ def _append_log_to_staging(
             "wiki_status": "stable",
         }
     fm["date"] = today
+    compiled_raws = dict(snapshot.get("compiled_raws", {}))
+    for raw in raw_batch:
+        rel = raw["rel_path"]
+        if rel in cs.log_entry.raws_consumed:
+            compiled_raws[rel] = _raw_fingerprint(snapshot["pages"][rel])
+    fm["compiled_raws"] = compiled_raws
     dest = staging_dir / "log.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(_render_page(fm, body), encoding="utf-8")
@@ -743,7 +759,7 @@ def main() -> int:
     parser.add_argument(
         "--since-last-compile",
         action="store_true",
-        help="select raw notes whose wiki_status is still 'ingested' (default if no other selector)",
+        help="select ingested raw notes not recorded as compiled, or changed since compile (default)",
     )
     parser.add_argument(
         "--raw-only", default=None, help="glob (relative to wiki root) selecting a raw subset"
@@ -901,7 +917,7 @@ def main() -> int:
     )
 
     materialize_to_staging(cs, staging_dir)
-    _append_log_to_staging(staging_dir, args.slug, snapshot, cs, backend, duration_s)
+    _append_log_to_staging(staging_dir, args.slug, snapshot, cs, backend, duration_s, raw_batch)
     regenerate_index_to_staging(staging_dir, args.slug, snapshot, cs, mode)
 
     rc = write_to_vault(staging_dir, on_conflict=args.on_conflict)
