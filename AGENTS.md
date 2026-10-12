@@ -73,19 +73,26 @@ It is **not** automatic end-to-end: the first build is explicit, and search
 only helps if you actually run it. Follow this protocol — do not treat memory
 as optional.
 
-1. **Ensure the index exists.** On a new setup, after `git pull`, or whenever
-   unsure, run `python3 scripts/memory_index.py status`. If it reports
+1. **Migrate before checking an upgraded install.** After `git pull`, run
+   `python3 scripts/migrate.py` with write access to the configured index,
+   or run `bash install.sh`, which invokes the migration. This converts
+   legacy WAL indexes to DELETE mode before a read-only sandbox opens them.
+   Do not enter the read-only status/search flow until migration succeeds;
+   if index writes are blocked, request the required approval rather than
+   changing the read-only connection mode.
+2. **Ensure the index exists.** On a new setup or whenever unsure, run
+   `python3 scripts/memory_index.py status`. If it reports
    `exists: false`, build it once: `python3 scripts/memory_index.py build`
    (or `python3 scripts/migrate.py`, which builds it idempotently). The index
    does **not** self-create on the first vault write — `vault_writer` only
    refreshes an index that already exists and prints a `NOTE:` hint to stderr
    when it is missing.
-2. **Search before you answer or write.** Before answering any question about
+3. **Search before you answer or write.** Before answering any question about
    vault / wiki content, and before `wiki_compile.py` / `wiki_update.py` (to
    avoid duplicating existing knowledge), first run
    `python3 scripts/memory_index.py search "<query>" --json`. Prefer recall
    over guessing from memory.
-3. **Self-heal on miss.** If a search raises `index not built yet`, run
+4. **Self-heal on miss.** If a search raises `index not built yet`, run
    `python3 scripts/memory_index.py build`, then retry the search.
 
 After a build, `[memory].auto_update` keeps the index fresh on every
