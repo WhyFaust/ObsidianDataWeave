@@ -33,6 +33,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     from scripts.config import load_config
@@ -119,7 +120,11 @@ def resolve_tokenizer(name: str) -> str:
 def open_db(db_path: Path, *, readonly: bool = False) -> sqlite3.Connection:
     """Open readers without creating files or changing journal state."""
     if readonly:
-        conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
+        uri = db_path.resolve().as_uri()
+        if urlsplit(uri).netloc:
+            # SQLite needs an empty authority; the UNC host stays in the path.
+            uri = uri.replace("file://", "file:////", 1)
+        conn = sqlite3.connect(uri + "?mode=ro", uri=True)
     else:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(db_path))

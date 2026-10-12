@@ -1,7 +1,9 @@
 """Tests for memory_index.py — FTS5 vault memory (build/update/search)."""
 
+import os
 import sqlite3
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from unittest.mock import Mock
 
 import pytest
 
@@ -183,6 +185,24 @@ def test_read_only_connection_rejects_writes(cfg: dict) -> None:
             conn.execute("DELETE FROM files")
     finally:
         conn.close()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX local path emulates UNC without a network share")
+def test_read_only_unc_uri_preserves_path_and_rejects_writes(cfg: dict) -> None:
+    update_index(cfg, full=True, quiet=True)
+    db_path = db_path_for_vault(Path(cfg["vault"]["vault_path"]), cfg["memory"]["db_dir"])
+    unc_path = PureWindowsPath("//" + db_path.as_posix().lstrip("/"))
+    path = Mock(spec=Path)
+    path.resolve.return_value = unc_path
+    before = db_path.read_bytes()
+    conn = open_db(path, readonly=True)
+    try:
+        assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 4
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            conn.execute("DELETE FROM files")
+    finally:
+        conn.close()
+    assert db_path.read_bytes() == before
 
 
 def test_read_only_open_does_not_create_missing_index(tmp_path: Path) -> None:
