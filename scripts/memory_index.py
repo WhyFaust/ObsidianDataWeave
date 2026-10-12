@@ -116,11 +116,21 @@ def resolve_tokenizer(name: str) -> str:
     return "unicode61 remove_diacritics 2"
 
 
-def open_db(db_path: Path) -> sqlite3.Connection:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+def open_db(db_path: Path, *, readonly: bool = False) -> sqlite3.Connection:
+    """Open readers without creating files or changing journal state."""
+    if readonly:
+        conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
+    else:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path))
+    try:
+        if not readonly:
+            # WAL needs sidecar writes even for readers in a read-only sandbox.
+            conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA busy_timeout=5000")
+    except sqlite3.Error:
+        conn.close()
+        raise
     return conn
 
 
@@ -363,7 +373,7 @@ def search(config: dict, query: str, *, limit: int = 10, folder: str = "",
     sql += " ORDER BY rank LIMIT ?"
     params.append(max(1, limit))
 
-    conn = open_db(db_path)
+    conn = open_db(db_path, readonly=True)
     try:
         rows = conn.execute(sql, params).fetchall()
     finally:
@@ -390,7 +400,7 @@ def status(config: dict) -> dict:
     db_path = db_path_for_vault(vault_path, mem["db_dir"])
     if not db_path.exists():
         return {"db": str(db_path), "exists": False}
-    conn = open_db(db_path)
+    conn = open_db(db_path, readonly=True)
     try:
         notes = conn.execute("SELECT count(*) FROM files").fetchone()[0]
         meta = dict(conn.execute("SELECT key, value FROM meta"))

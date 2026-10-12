@@ -1,5 +1,6 @@
 """Tests for memory_index.py — FTS5 vault memory (build/update/search)."""
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from scripts.memory_index import (
     build_match_expr,
     db_path_for_vault,
     fts5_available,
+    open_db,
     search,
     status,
     update_index,
@@ -170,3 +172,55 @@ def test_search_without_index_raises(cfg: dict, tmp_path: Path) -> None:
     cfg["memory"]["db_dir"] = str(tmp_path / "nowhere")
     with pytest.raises(RuntimeError, match="index not built"):
         search(cfg, "anything")
+
+
+def test_read_only_connection_rejects_writes(cfg: dict) -> None:
+    update_index(cfg, full=True, quiet=True)
+    db_path = db_path_for_vault(Path(cfg["vault"]["vault_path"]), cfg["memory"]["db_dir"])
+    conn = open_db(db_path, readonly=True)
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            conn.execute("DELETE FROM files")
+    finally:
+        conn.close()
+
+
+def test_read_only_open_does_not_create_missing_index(tmp_path: Path) -> None:
+    db_path = tmp_path / "missing" / "index.db"
+    with pytest.raises(sqlite3.OperationalError):
+        open_db(db_path, readonly=True)
+    assert not db_path.parent.exists()
+
+
+def test_read_helpers_work_without_write_permissions(cfg: dict, tmp_path: Path) -> None:
+    cfg["memory"]["db_dir"] = str(tmp_path / "cache with # and ?")
+    update_index(cfg, full=True, quiet=True)
+    db_path = db_path_for_vault(Path(cfg["vault"]["vault_path"]), cfg["memory"]["db_dir"])
+    before = db_path.read_bytes()
+    db_path.chmod(0o444)
+    db_path.parent.chmod(0o555)
+    try:
+        assert search(cfg, "агенты")[0]["path"] == "Notes/ai-agents.md"
+        assert status(cfg)["notes"] == 4
+        assert db_path.read_bytes() == before
+        assert list(db_path.parent.iterdir()) == [db_path]
+    finally:
+        db_path.parent.chmod(0o755)
+        db_path.chmod(0o644)
+
+
+def test_writer_converts_existing_wal_index(cfg: dict) -> None:
+    update_index(cfg, full=True, quiet=True)
+    db_path = db_path_for_vault(Path(cfg["vault"]["vault_path"]), cfg["memory"]["db_dir"])
+    conn = sqlite3.connect(str(db_path))
+    try:
+        assert conn.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+    finally:
+        conn.close()
+    update_index(cfg, quiet=True)
+    conn = open_db(db_path, readonly=True)
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+        assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 4
+    finally:
+        conn.close()
