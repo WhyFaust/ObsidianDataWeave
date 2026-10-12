@@ -100,6 +100,7 @@ def resolves_wikilink(target: str, known_names: set[str], known_paths: set[str],
                       wiki_prefix: str = "") -> bool:
     """Resolve names and paths inside one wiki-space."""
     return (target in known_names
+            or target.removesuffix(".md") in known_names
             or target.removeprefix(wiki_prefix).removesuffix(".md") in known_paths)
 
 

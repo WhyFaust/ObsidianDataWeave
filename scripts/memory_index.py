@@ -32,6 +32,8 @@ import re
 import sqlite3
 import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -137,6 +139,26 @@ def open_db(db_path: Path, *, readonly: bool = False) -> sqlite3.Connection:
         conn.close()
         raise
     return conn
+
+
+@contextmanager
+def _read_db(db_path: Path) -> Iterator[sqlite3.Connection]:
+    conn = open_db(db_path, readonly=True)
+    try:
+        yield conn
+    except sqlite3.OperationalError as exc:
+        # Python 3.10 does not expose SQLite's extended error names.
+        if (getattr(exc, "sqlite_errorname", "") == "SQLITE_READONLY_ROLLBACK"
+                or (str(exc) == "attempt to write a readonly database"
+                    and Path(str(db_path) + "-journal").is_file())):
+            raise RuntimeError(
+                f"INDEX_RECOVERY_REQUIRED: hot rollback journal for {db_path} — "
+                "run: python3 scripts/memory_index.py update with write access "
+                "to the index directory, then retry; do not delete the journal"
+            ) from exc
+        raise
+    finally:
+        conn.close()
 
 
 def ensure_schema(conn: sqlite3.Connection, tokenizer: str) -> None:
@@ -378,11 +400,8 @@ def search(config: dict, query: str, *, limit: int = 10, folder: str = "",
     sql += " ORDER BY rank LIMIT ?"
     params.append(max(1, limit))
 
-    conn = open_db(db_path, readonly=True)
-    try:
+    with _read_db(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
-    finally:
-        conn.close()
 
     return [
         {
@@ -405,12 +424,9 @@ def status(config: dict) -> dict:
     db_path = db_path_for_vault(vault_path, mem["db_dir"])
     if not db_path.exists():
         return {"db": str(db_path), "exists": False}
-    conn = open_db(db_path, readonly=True)
-    try:
+    with _read_db(db_path) as conn:
         notes = conn.execute("SELECT count(*) FROM files").fetchone()[0]
         meta = dict(conn.execute("SELECT key, value FROM meta"))
-    finally:
-        conn.close()
     return {
         "db": str(db_path),
         "exists": True,

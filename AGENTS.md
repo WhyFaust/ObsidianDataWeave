@@ -94,6 +94,11 @@ as optional.
    over guessing from memory.
 4. **Self-heal on miss.** If a search raises `index not built yet`, run
    `python3 scripts/memory_index.py build`, then retry the search.
+5. **Recover interrupted writes explicitly.** If status/search reports
+   `INDEX_RECOVERY_REQUIRED`, an interrupted write left a hot rollback journal.
+   Run `python3 scripts/memory_index.py update` with write access to the index
+   and its directory, then retry the read-only query. Request approval if writes
+   are blocked. Never delete the journal or bypass recovery with `immutable=1`.
 
 After a build, `[memory].auto_update` keeps the index fresh on every
 `vault_writer` write — no manual refresh is needed during normal operation.

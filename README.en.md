@@ -79,6 +79,12 @@ The installer is idempotent: skill symlinks update themselves, `migrate.py`
 appends new config sections (e.g. `[memory]`) and deploys the FTS5 memory
 index. `config.toml` and the vault are never overwritten.
 
+After an interrupted index write, `status/search` may report
+`INDEX_RECOVERY_REQUIRED`: SQLite must roll back the unfinished transaction.
+Run `python3 scripts/memory_index.py update` with write access to the index
+and its directory, then retry the read-only query. Do not delete `-journal`
+manually or bypass recovery with `immutable=1`.
+
 ### Install modes
 
 | Mode | Flag | What it does |

@@ -2,6 +2,8 @@
 
 import os
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path, PureWindowsPath
 from unittest.mock import Mock
 
@@ -244,3 +246,36 @@ def test_writer_converts_existing_wal_index(cfg: dict) -> None:
         assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 4
     finally:
         conn.close()
+
+
+def test_hot_journal_requires_explicit_recovery(cfg: dict) -> None:
+    update_index(cfg, full=True, quiet=True)
+    db_path = db_path_for_vault(Path(cfg["vault"]["vault_path"]), cfg["memory"]["db_dir"])
+    crashed = subprocess.run(
+        [sys.executable, "-c", """
+import os
+import sqlite3
+import sys
+
+conn = sqlite3.connect(sys.argv[1])
+conn.execute("PRAGMA cache_size=1")
+conn.execute("BEGIN IMMEDIATE")
+conn.execute("DELETE FROM files")
+conn.execute("UPDATE notes_fts SET body = ?", ("uncommitted " * 20000,))
+os._exit(99)
+""", str(db_path)],
+        capture_output=True, timeout=10,
+    )
+    assert crashed.returncode == 99, crashed.stderr.decode()
+    journal = Path(str(db_path) + "-journal")
+    assert journal.exists()
+    before = (db_path.read_bytes(), journal.read_bytes())
+    for reader in [lambda: status(cfg), lambda: search(cfg, "агенты")]:
+        with pytest.raises(RuntimeError, match="INDEX_RECOVERY_REQUIRED.*memory_index.py update"):
+            reader()
+        assert (db_path.read_bytes(), journal.read_bytes()) == before
+
+    assert update_index(cfg, quiet=True)["indexed"] == 0
+    assert not journal.exists()
+    assert status(cfg)["notes"] == 4
+    assert search(cfg, "агенты")[0]["path"] == "Notes/ai-agents.md"

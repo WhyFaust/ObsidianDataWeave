@@ -193,6 +193,8 @@ def test_wikilink_to_existing_stem_resolves(project_space: Path) -> None:
 @pytest.mark.parametrize("target", [
     "entities/postgres", "entities/postgres.md",
     "{prefix}/entities/postgres", "{prefix}/entities/postgres.md#Details|Postgres",
+    "postgres.md", "postgres.md#Details", "postgres.md|Postgres",
+    "postgres.md#Details|Postgres",
 ])
 def test_compiler_and_linter_agree_on_path_links(project_space: Path, target: str) -> None:
     _write(project_space / "entities/postgres.md", _good_fm("demo", "entity", "postgres"),
@@ -210,6 +212,7 @@ def test_compiler_and_linter_agree_on_path_links(project_space: Path, target: st
 @pytest.mark.parametrize("target", [
     "entities/missing", "{folder}/other/entities/postgres",
     "{folder}/demo/../other/entities/postgres", "../entities/postgres",
+    "missing.md", "{folder}/other/postgres.md", "{folder}/other/entities/postgres.md",
 ])
 def test_linter_rejects_missing_and_foreign_path_links(project_space: Path, target: str) -> None:
     _write(project_space / "entities/postgres.md", _good_fm("demo", "entity", "postgres"),
