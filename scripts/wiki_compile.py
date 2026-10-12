@@ -143,7 +143,7 @@ def snapshot_wiki_space(root: Path) -> dict[str, Any]:
     pages: dict[str, dict[str, Any]] = {}
     existing_links: dict[str, list[str]] = {}
     for md in root.rglob("*.md"):
-        rel = str(md.relative_to(root))
+        rel = md.relative_to(root).as_posix()
         try:
             text = md.read_text(encoding="utf-8")
         except OSError:
@@ -159,6 +159,7 @@ def snapshot_wiki_space(root: Path) -> dict[str, Any]:
     return {
         "slug": root.name,
         "exists": True,
+        "wiki_prefix": f"{root.parent.name}/{root.name}/",
         "mode": schema_fm.get("wiki_mode", "unknown"),
         "schema_frontmatter": schema_fm,
         "log_tail": log_tail,
@@ -393,6 +394,7 @@ def validate_changeset(cs: ChangeSet, snapshot: dict[str, Any]) -> None:
     # 3. Wikilink resolution: every [[link]] resolves to existing snapshot
     #    page, a page in creates[], or the explicit [[?slug]] open-question.
     known_stems = {Path(rel).stem for rel in snapshot["pages"]}
+    known_paths = {rel.removesuffix(".md") for rel in snapshot["pages"]}
     known_titles = set()
     for page in snapshot["pages"].values():
         body = page["body"]
@@ -402,12 +404,16 @@ def validate_changeset(cs: ChangeSet, snapshot: dict[str, Any]) -> None:
                 break
     for c in cs.creates:
         known_stems.add(Path(c.rel_path).stem)
+        known_paths.add(c.rel_path.removesuffix(".md"))
 
     for page in list(cs.creates) + list(cs.updates):
         for target in _extract_wikilink_targets(page.body):
             if target.startswith("?"):
                 continue
             if target in known_stems or target in known_titles:
+                continue
+            relative_target = target.removeprefix(snapshot.get("wiki_prefix", ""))
+            if relative_target.removesuffix(".md") in known_paths:
                 continue
             errors.append(
                 f"{page.rel_path}: wikilink [[{target}]] does not resolve in this wiki-space"

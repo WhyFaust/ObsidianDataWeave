@@ -77,6 +77,54 @@ def _seed_space(root: Path) -> None:
 # ── Pure helpers ─────────────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize("target", [
+    "entities/postgres", "entities/postgres.md",
+    "LLM Wiki/demo/entities/postgres", "LLM Wiki/demo/entities/postgres.md",
+    "LLM Wiki/demo/entities/postgres#Details|Postgres",
+])
+def test_path_wikilinks_resolve_within_space(tmp_path: Path, target: str):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="entities/kafka.md",
+        frontmatter=_good_fm("demo", "entity", "kafka"),
+        body=f"# Kafka\n\nSee [[{target}]].",
+    )])
+    validate_changeset(cs, snapshot_wiki_space(root))
+
+
+@pytest.mark.parametrize("target", [
+    "LLM Wiki/other/entities/postgres", "LLM Wiki/demo/entities/missing",
+    "LLM Wiki/demo/../other/entities/postgres", "../entities/postgres",
+])
+def test_path_wikilinks_reject_missing_or_other_space(tmp_path: Path, target: str):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="entities/kafka.md",
+        frontmatter=_good_fm("demo", "entity", "kafka"),
+        body=f"# Kafka\n\nSee [[{target}]].",
+    )])
+    with pytest.raises(ValidationError, match="does not resolve"):
+        validate_changeset(cs, snapshot_wiki_space(root))
+
+
+def test_path_wikilinks_still_must_be_preserved(tmp_path: Path):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    page = root / "pages" / "architecture.md"
+    page.write_text(page.read_text() + "\n[[LLM Wiki/demo/entities/postgres]]\n")
+    snapshot = snapshot_wiki_space(root)
+    cs = ChangeSet(project="demo", compile_id="x", updates=[WikiPageUpdate(
+        rel_path="pages/architecture.md", expected_existing_links=[],
+        frontmatter=snapshot["pages"]["pages/architecture.md"]["frontmatter"],
+        body="# Architecture\n\n[[postgres]] and [[redis]].",
+    )])
+    with pytest.raises(ValidationError) as exc:
+        validate_changeset(cs, snapshot)
+    assert exc.value.marker == "WIKI_LINKS_LOST"
+
+
 class TestExtractWikilinks:
     def test_basic(self):
         assert _extract_wikilink_targets("hello [[foo]] world") == {"foo"}
