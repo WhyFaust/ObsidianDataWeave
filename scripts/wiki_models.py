@@ -96,6 +96,13 @@ def is_valid_wiki_source_doc(value: str) -> bool:
     return bool(SOURCE_DOC_RE.match(value or ""))
 
 
+def resolves_wikilink(target: str, known_names: set[str], known_paths: set[str],
+                      wiki_prefix: str = "") -> bool:
+    """Resolve names and paths inside one wiki-space."""
+    return (target in known_names
+            or target.removeprefix(wiki_prefix).removesuffix(".md") in known_paths)
+
+
 # ── ChangeSet primitives ───────────────────────────────────────────────────────
 
 

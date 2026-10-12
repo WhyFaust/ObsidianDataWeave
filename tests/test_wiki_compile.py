@@ -1,7 +1,7 @@
 """Tests for scripts/wiki_compile.py — no live backend or vault writes."""
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import Mock
 
 import pytest
@@ -123,6 +123,41 @@ def test_path_wikilinks_still_must_be_preserved(tmp_path: Path):
     with pytest.raises(ValidationError) as exc:
         validate_changeset(cs, snapshot)
     assert exc.value.marker == "WIKI_LINKS_LOST"
+
+
+def test_windows_routed_create_cannot_overwrite_page(tmp_path: Path, monkeypatch):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    monkeypatch.setattr(wiki_compile, "get_vault_dest",
+                        lambda *args: PureWindowsPath("wiki/demo/pages"))
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="drafts/architecture.md",
+        frontmatter=_good_fm("demo", "core", "architecture"),
+        body="# Replacement\n\n[[postgres]]",
+    )])
+    with pytest.raises(ValidationError, match=r"already exists in snapshot.*use updates\[\]"):
+        validate_changeset(cs, snapshot_wiki_space(root))
+
+
+def test_create_rejects_staging_path_different_from_writer_route(tmp_path: Path):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="drafts/kafka.md", frontmatter=_good_fm("demo", "entity", "kafka"),
+        body="# Kafka\n\n[[drafts/kafka]]",
+    )])
+    with pytest.raises(ValidationError, match="must use routed path 'entities/kafka.md'"):
+        validate_changeset(cs, snapshot_wiki_space(root))
+
+
+def test_create_accepts_link_to_its_actual_destination(tmp_path: Path):
+    root = tmp_path / "LLM Wiki" / "demo"
+    _seed_space(root)
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="entities/kafka.md", frontmatter=_good_fm("demo", "entity", "kafka"),
+        body="# Kafka\n\n[[entities/kafka]]",
+    )])
+    validate_changeset(cs, snapshot_wiki_space(root))
 
 
 class TestExtractWikilinks:

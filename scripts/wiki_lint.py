@@ -55,6 +55,7 @@ try:
         WIKI_STATUSES,
         is_valid_slug,
         is_valid_wiki_source_doc,
+        resolves_wikilink,
     )
 except ModuleNotFoundError:
     from config import load_config as _load_config
@@ -69,6 +70,7 @@ except ModuleNotFoundError:
         WIKI_STATUSES,
         is_valid_slug,
         is_valid_wiki_source_doc,
+        resolves_wikilink,
     )
 
 
@@ -155,7 +157,7 @@ def _detect_mode(root: Path) -> str:
 def _load_space(root: Path) -> WikiSpaceSnapshot:
     snapshot = WikiSpaceSnapshot(slug=root.name, root=root, mode=_detect_mode(root))
     for md_file in root.rglob("*.md"):
-        rel = str(md_file.relative_to(root))
+        rel = md_file.relative_to(root).as_posix()
         try:
             text = md_file.read_text(encoding="utf-8")
         except OSError:
@@ -290,14 +292,15 @@ def _check_frontmatter(snapshot: WikiSpaceSnapshot, issues: list[LintIssue]) -> 
 
 
 def _check_wikilinks(snapshot: WikiSpaceSnapshot, issues: list[LintIssue]) -> None:
-    known_titles = snapshot.page_titles()
-    known_stems = snapshot.page_stems()
+    known_names = snapshot.page_titles() | snapshot.page_stems()
+    known_paths = {rel.removesuffix(".md") for rel in snapshot.pages}
+    wiki_prefix = f"{snapshot.root.parent.name}/{snapshot.slug}/"
     for rel, page in snapshot.pages.items():
         targets = _extract_wikilink_targets(page["body"])
         for target in targets:
             if OPEN_QUESTION_LINK_RE.match(target):
                 continue
-            if target in known_titles or target in known_stems:
+            if resolves_wikilink(target, known_names, known_paths, wiki_prefix):
                 continue
             issues.append(
                 LintIssue(

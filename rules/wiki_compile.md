@@ -89,6 +89,10 @@ wiki-space.
 
 ### 3. Frontmatter must be complete and valid
 
+Each `creates[]` entry must use the writer's canonical destination as `rel_path`
+(for example `pages/<stem>.md` for core pages and `entities/<stem>.md` for entities).
+Do not use an arbitrary staging directory. Links must refer to the final destination.
+
 Every page in `creates[]` and `updates[]` must carry: `note_type`,
 `wiki_project`, `wiki_page_type`, `wiki_status`, `date`. `source_doc`
 must follow `wiki:<slug>:<page_type>:<stem>`. `wiki_page_type` and

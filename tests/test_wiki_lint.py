@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from scripts.wiki_lint import discover_spaces, lint_space
+from scripts.wiki_compile import materialize_to_staging, snapshot_wiki_space, validate_changeset
+from scripts.wiki_models import ChangeSet, WikiPage
 
 
 # ── Fixture helpers ──────────────────────────────────────────────────────────
@@ -186,6 +188,36 @@ def test_wikilink_to_existing_stem_resolves(project_space: Path) -> None:
            body="# Linker\n\n[[overview]] is a core page.")
     issues = lint_space(project_space)
     assert not [i for i in issues if i.code == "UNRESOLVED_WIKILINK"]
+
+
+@pytest.mark.parametrize("target", [
+    "entities/postgres", "entities/postgres.md",
+    "{prefix}/entities/postgres", "{prefix}/entities/postgres.md#Details|Postgres",
+])
+def test_compiler_and_linter_agree_on_path_links(project_space: Path, target: str) -> None:
+    _write(project_space / "entities/postgres.md", _good_fm("demo", "entity", "postgres"),
+           body="# Postgres\n")
+    target = target.format(prefix=f"{project_space.parent.name}/demo")
+    cs = ChangeSet(project="demo", compile_id="x", creates=[WikiPage(
+        rel_path="entities/linker.md", frontmatter=_good_fm("demo", "entity", "linker"),
+        body=f"# Linker\n\n[[{target}]]",
+    )])
+    validate_changeset(cs, snapshot_wiki_space(project_space))
+    materialize_to_staging(cs, project_space)
+    assert not [i for i in lint_space(project_space) if i.code == "UNRESOLVED_WIKILINK"]
+
+
+@pytest.mark.parametrize("target", [
+    "entities/missing", "{folder}/other/entities/postgres",
+    "{folder}/demo/../other/entities/postgres", "../entities/postgres",
+])
+def test_linter_rejects_missing_and_foreign_path_links(project_space: Path, target: str) -> None:
+    _write(project_space / "entities/postgres.md", _good_fm("demo", "entity", "postgres"),
+           body="# Postgres\n")
+    target = target.format(folder=project_space.parent.name)
+    _write(project_space / "entities/linker.md", _good_fm("demo", "entity", "linker"),
+           body=f"# Linker\n\n[[{target}]]")
+    assert [i for i in lint_space(project_space) if i.code == "UNRESOLVED_WIKILINK"]
 
 
 # ── Duplicate entities ───────────────────────────────────────────────────────

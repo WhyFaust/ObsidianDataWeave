@@ -54,6 +54,7 @@ try:
         is_valid_slug,
         is_valid_wiki_source_doc,
         parse_changeset,
+        resolves_wikilink,
     )
 except ModuleNotFoundError:
     from config import PROJECT_ROOT, load_config as _load_config
@@ -70,6 +71,7 @@ except ModuleNotFoundError:
         is_valid_slug,
         is_valid_wiki_source_doc,
         parse_changeset,
+        resolves_wikilink,
     )
 
 
@@ -374,10 +376,14 @@ def validate_changeset(cs: ChangeSet, snapshot: dict[str, Any]) -> None:
     for page in cs.creates:
         try:
             dest_dir = get_vault_dest(WIKI_NOTE_TYPE, routing_config, page.frontmatter)
-            dest_rel = str((dest_dir / Path(page.rel_path).name).relative_to(routing_root))
+            dest_rel = (dest_dir / Path(page.rel_path).name).relative_to(routing_root).as_posix()
         except ValueError as exc:
             errors.append(f"creates[{page.rel_path}]: {exc}")
             continue
+        if page.rel_path != dest_rel:
+            errors.append(
+                f"creates[{page.rel_path}]: must use routed path '{dest_rel}'"
+            )
         existing_rel = page.rel_path if page.rel_path in snapshot["pages"] else dest_rel
         if existing_rel in snapshot["pages"]:
             errors.append(
@@ -405,15 +411,13 @@ def validate_changeset(cs: ChangeSet, snapshot: dict[str, Any]) -> None:
     for c in cs.creates:
         known_stems.add(Path(c.rel_path).stem)
         known_paths.add(c.rel_path.removesuffix(".md"))
+    known_names = known_stems | known_titles
 
     for page in list(cs.creates) + list(cs.updates):
         for target in _extract_wikilink_targets(page.body):
             if target.startswith("?"):
                 continue
-            if target in known_stems or target in known_titles:
-                continue
-            relative_target = target.removeprefix(snapshot.get("wiki_prefix", ""))
-            if relative_target.removesuffix(".md") in known_paths:
+            if resolves_wikilink(target, known_names, known_paths, snapshot.get("wiki_prefix", "")):
                 continue
             errors.append(
                 f"{page.rel_path}: wikilink [[{target}]] does not resolve in this wiki-space"
