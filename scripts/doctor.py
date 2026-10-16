@@ -167,6 +167,9 @@ def main() -> None:
                     )
             except ValueError as exc:
                 print(f"INFO     memory index: skipped ({exc})")
+            except RuntimeError as exc:
+                print(f"ERROR    memory index: {exc}")
+                ok = False
 
     ok &= check_command("python3")
     ok &= check_command("claude")

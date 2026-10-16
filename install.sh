@@ -107,8 +107,7 @@ done
 
 echo ""
 echo "== Migrate (FTS5 memory) =="
-python3 "${REPO_DIR}/scripts/migrate.py" \
-    || echo "WARNING: migration failed (non-fatal) — run scripts/migrate.py manually"
+python3 "${REPO_DIR}/scripts/migrate.py"
 
 # ── Step 5: Mode-specific registration ──────────────────────────────────────
 
