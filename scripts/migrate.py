@@ -90,7 +90,10 @@ def ensure_index(config: dict) -> str:
     except ValueError:
         return "skipped (vault_path not configured yet)"
     if not vault_path.is_dir():
-        return f"skipped (vault_path does not exist: {vault_path})"
+        raise RuntimeError(
+            f"vault_path is unavailable or not a directory: {vault_path}. "
+            "Restore access or correct vault_path in config.toml, then rerun migration."
+        )
 
     db_path = db_path_for_vault(vault_path, mem["db_dir"])
     full = not db_path.exists()
